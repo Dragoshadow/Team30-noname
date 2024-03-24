@@ -1,0 +1,47 @@
+void setup() {
+  pinMode(7, OUTPUT); // Buzzer pin set as output
+  pinMode(8, OUTPUT); // LED pin set as output
+}
+
+void loop() {
+  // Letter L: .-..
+  dot(); pause(); dash(); pause(); dot(); pause(); dot(); letterPause();
+  
+  // Letter R: .-.
+  dot(); pause(); dash(); pause(); dot(); letterPause();
+  
+  // Letter F: ..-.
+  dot(); pause(); dot(); pause(); dash(); pause(); dot(); letterPause();
+  
+  // Letter B: -...
+  dash(); pause(); dot(); pause(); dot(); pause(); dot(); letterPause();
+  
+  // Pause between sequences of L, R, F, B
+  delay(700); // Longer pause to distinguish the sequence repeat
+}
+
+void dot() {
+  tone(7, 1000, 100); // Play tone for 100 ms on buzzer
+  digitalWrite(8, HIGH); // Turn LED on
+  delay(100); // Duration of a dot is 100 ms
+  digitalWrite(8, LOW); // Turn LED off
+}
+
+void dash() {
+  tone(7, 1000, 300); // Play tone for 300 ms on buzzer
+  digitalWrite(8, HIGH); // Turn LED on
+  delay(300); // Duration of a dash is 300 ms
+  digitalWrite(8, LOW); // Turn LED off
+}
+
+void pause() {
+  noTone(7); // Stop the tone on the buzzer
+  digitalWrite(8, LOW); // Ensure LED is off
+  delay(100); // Short pause between parts of the same letter
+}
+
+void letterPause() {
+  noTone(7); // Ensure no tone is playing on the buzzer
+  digitalWrite(8, LOW); // Ensure LED is off
+  delay(300); // Pause between letters
+}
