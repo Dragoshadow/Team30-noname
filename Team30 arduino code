@@ -1,0 +1,198 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+const int joyPinX = A0; // Analog pin for X-axis
+const int joyPinY = A1; // Analog pin for Y-axis
+const int joyButtonPin = 2; // Digital pin for joystick button
+const int buzzerPin = 3; // Digital pin for active buzzer
+const int ledPins[] = {4, 5, 6, 7}; // Digital pins for LEDs
+
+const int joyCenterX = 512; // Center value for X-axis
+const int joyCenterY = 512; // Center value for Y-axis
+const int threshold = 50; // Threshold for detecting movement
+const int resetThreshold = 100; // Threshold for detecting joystick button press
+const long morseDelay = 500; // Delay for Morse code playback
+const long buzzerDelay = 30000; // Delay between buzzer plays
+
+long currentX = 0; // Current X coordinate
+long currentY = 0; // Current Y coordinate
+
+int ThresholdError = 750; // Additive value for thresholds
+int xThresholdMin = 3000; // Minimum threshold for X coordinate
+int xThresholdMax = xThresholdMin + ThresholdError; // Maximum threshold for X coordinate
+int yThresholdMin = 5000; // Minimum threshold for Y coordinate
+int yThresholdMax = yThresholdMin + ThresholdError; // Maximum threshold for Y coordinate
+
+// Ensure proper pin connections for your LCD
+LiquidCrystal_I2C lcd(0x27, 16, 2); // Set the LCD I2C address to 0x27, and the LCD size to 16x2
+
+unsigned long lastReadTime = 0; // Last time joystick was read
+unsigned long lastButtonPressTime = 0; // Last time button was pressed
+unsigned long lastBuzzerTime = 0; // Last time buzzer was played
+
+bool buzzerPlaying = false; // Flag to track buzzer playing status
+
+void setup() {
+  Serial.begin(9600); // Initialize serial communication
+  pinMode(joyButtonPin, INPUT_PULLUP); // Set joystick button pin as input with pull-up resistor
+  for (int i = 0; i < 4; i++) {
+    pinMode(ledPins[i], OUTPUT); // Set LED pins as output
+  }
+  pinMode(buzzerPin, OUTPUT); // Set buzzer pin as output
+  
+  // Initialize the Wire library (necessary for I2C communication)
+  Wire.begin();
+  
+  // Initialize the LCD
+  lcd.init(); 
+  lcd.backlight(); // Turn on the backlight
+  lcd.print("Setup Complete");
+
+  currentX = 0; // Set current X coordinate to 0
+  currentY = 0; // Set current Y coordinate to 0
+}
+
+void loop() {
+  unsigned long currentTime = millis();
+
+  // Start time count
+  if (currentTime - lastReadTime >= 1000) {
+    // Read joystick input
+    readJoystick();
+    if (((currentX > xThresholdMin) && (currentX < xThresholdMax)) && ((currentY > yThresholdMin) && (currentY < yThresholdMax)) && digitalRead(joyButtonPin) == LOW) {
+      currentX = 0;
+      currentY = 0;
+      Serial.println("Coordinates Reset");
+
+      delay(1000); // Delay for button debounce
+    }
+    lastReadTime = currentTime;
+  }
+
+
+  // Check for direction functions
+  if (currentX < xThresholdMin - threshold) {
+    Left(currentTime - lastButtonPressTime >= 30000);
+  } else {
+    digitalWrite(ledPins[0], LOW); // Turn off LED
+  }
+  if (currentX > xThresholdMax + threshold) {
+    Right(currentTime - lastButtonPressTime >= 30000);
+  } else {
+    digitalWrite(ledPins[1], LOW); // Turn off LED
+  }
+
+  if (currentY < yThresholdMin - threshold) {
+    Forward(currentTime - lastButtonPressTime >= 30000);
+  } else {
+    digitalWrite(ledPins[2], LOW); // Turn off LED
+  }
+
+  if (currentY > yThresholdMax + threshold) {
+    Backward(currentTime - lastButtonPressTime >= 30000);
+  } else {
+    digitalWrite(ledPins[3], LOW); // Turn off LED
+  }
+
+  if (currentTime - lastButtonPressTime >= 30000) {
+    lastButtonPressTime = currentTime; // Reset timer
+  }
+}
+
+void readJoystick() {
+  int joyX = analogRead(joyPinX); // Read X-axis value
+  int joyY = analogRead(joyPinY); // Read Y-axis value
+  
+  // Calculate increments moved in X and Y directions
+  int deltaX = joyX - joyCenterX;
+  int deltaY = joyY - joyCenterY;
+
+  // Update current coordinates based on movement
+  currentX += deltaX;
+  currentY += deltaY;
+  
+  // Output current coordinates
+  Serial.print("Current X: ");
+  Serial.print(currentX);
+  Serial.print(", Current Y: ");
+  Serial.println(currentY);
+}
+
+void displayMessage(const char* message) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(message);
+}
+
+void indicateDirection(int index, const char* message, void (*morseFunc)(), bool morseActive) {
+  if (morseActive) morseFunc(); // Play Morse code
+  digitalWrite(ledPins[index], HIGH); // Light up LED
+  displayMessage(message); // Display direction on LCD
+}
+
+void Left(bool morseActive) {
+  indicateDirection(0, "Left", morseL, morseActive);
+}
+
+void Right(bool morseActive) {
+  indicateDirection(1, "Right", morseR, morseActive);
+}
+
+void Forward(bool morseActive) {
+  indicateDirection(2, "Forward", morseF, morseActive);
+}
+
+void Backward(bool morseActive) {
+  indicateDirection(3, "Backward", morseB, morseActive);
+}
+
+void playMorse(const char* morseCode) {
+  Serial.print("Playing Morse code for '");
+  Serial.print(morseCode);
+  Serial.println("'");
+
+  digitalWrite(buzzerPin, LOW);
+  for (const char* p = morseCode; *p; p++) {
+    if (*p == '.') {
+      digitalWrite(buzzerPin, HIGH);
+      delay(morseDelay);
+      digitalWrite(buzzerPin, LOW);
+      delay(morseDelay);
+    } else if (*p == '-') {
+      digitalWrite(buzzerPin, HIGH);
+      delay(3 * morseDelay);
+      digitalWrite(buzzerPin, LOW);
+      delay(morseDelay);
+    } else if (*p == ' ') {
+      delay(2 * morseDelay);
+    }
+  }
+}
+
+void morseL() {
+  playMorse(".-..");
+}
+
+void morseR() {
+  playMorse(".-.");
+}
+
+void morseF() {
+  playMorse("..-.");
+}
+
+void morseB() {
+  playMorse("-...");
+}
+
+void playBuzzer() {
+  buzzerPlaying = true;
+  Serial.println("Playing buzzer");
+
+  // Play your desired buzzer tone here
+  digitalWrite(buzzerPin, HIGH);
+  delay(500); // Adjust as needed
+  digitalWrite(buzzerPin, LOW);
+
+  lastBuzzerTime = millis();
+  buzzerPlaying = false;
